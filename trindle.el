@@ -77,12 +77,14 @@
   :type 'string
   :group 'trindle)
 
-(defvar trindle-packages '()
+(defvar trindle-packages nil
   "Holding the list of packages.")
 
 (defmacro trindle:packages (&rest packages)
   "Macro for defining a package briefly."
-  `(setq trindle-packages (append trindle-packages '(,@packages))))
+  `(dolist (package '(,@packages))
+     (unless (member package trindle-packages)
+         (setq trindle-packages (append trindle-packages (list package))))))
 
 (defun trindle-get-package-name (url_or_repo)
   "Get package name by URL or repository name."
@@ -256,23 +258,22 @@
   (lexical-let* ((url (plist-get package :url))
                  (package-name (trindle-get-package-name url))
                  (install-dir (trindle-get-install-dir package-name)))
-    (if (file-accessible-directory-p install-dir)
-        (progn
-          (delete-file (trindle-get-install-path package-name))
-          (deferred:$
-            (deferred:url-retrieve url)
-            (deferred:nextc it
-              (lambda (buf)
-                (with-current-buffer buf
-                  (goto-char (point-min))
-                  (re-search-forward "^$" nil 'move)
-                  (forward-char)
-                  (delete-region (point-min) (point))
-                  (write-file (trindle-get-install-path package-name))
-                  (trindle-message "Package %s Updated." package-name)
-                  (kill-buffer))))
-            (deferred:error it
-              (lambda (err) (trindle-message "Package %s Updated Failuer." package-name))))))))
+    (when (file-accessible-directory-p install-dir)
+      (delete-file (trindle-get-install-path package-name))
+      (deferred:$
+        (deferred:url-retrieve url)
+        (deferred:nextc it
+          (lambda (buf)
+            (with-current-buffer buf
+              (goto-char (point-min))
+              (re-search-forward "^$" nil 'move)
+              (forward-char)
+              (delete-region (point-min) (point))
+              (write-file (trindle-get-install-path package-name))
+              (trindle-message "Package %s Updated." package-name)
+              (kill-buffer))))
+        (deferred:error it
+          (lambda (err) (trindle-message "Package %s Updated Failuer." package-name)))))))
 
 (eval-after-load "trindle"
   (if (file-exists-p trindle-init-file) (load trindle-init-file)))
