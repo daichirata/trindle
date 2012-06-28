@@ -25,14 +25,24 @@
 ;; Unlike package management, only the function of simple management is offered.
 ;; These manage that in which I have installed what from init.el(or any config file).
 ;;
+;;;  TODO:
 ;;
-;;  TODO:
-;;; Samples:
+;;     - Write a Sample and Useage.
+;;     - Refactoring of duplication function.
+;;     - Package is summarized in a group.
+;;     - Byte compile processing after installation is added.
+;;
+;;; Samples: It is temporary now :p
 ;;
 ;;   (require 'trindle)
+;;   (setq trindle-dir "~/.emacs.d/elisp/trindle")
+;;
 ;;   (trindle:packages
-;;     (:type "github"    :name "daic-h/trindle")
+;;     (:type "github" :name "ejmr/php-mode")
+;;     (:type "github" :name "defunkt/coffee-mode")
+;;     (:type "github" :name "daic-h/trindle")
 ;;     (:type "emacswiki" :name "auto-complete")
+;;     (:type "emacswiki" :name "ruby-block")
 ;;     (:type "http"      :name "http://www.emacswiki.org/emacs/download/anything.el"))
 ;;
 ;;   (trindle:install)
