@@ -38,12 +38,12 @@
 ;;   (setq trindle-dir "~/.emacs.d/elisp/trindle")
 ;;
 ;;   (trindle:packages
-;;     (:type "github" :name "ejmr/php-mode")
-;;     (:type "github" :name "defunkt/coffee-mode")
-;;     (:type "github" :name "daic-h/trindle")
+;;     (:type "github"    :name "ejmr/php-mode")
+;;     (:type "github"    :name "defunkt/coffee-mode")
+;;     (:type "github"    :name "daic-h/trindle")
 ;;     (:type "emacswiki" :name "auto-complete")
 ;;     (:type "emacswiki" :name "ruby-block")
-;;     (:type "http"      :name "http://www.emacswiki.org/emacs/download/anything.el"))
+;;     (:type "http"      :url  "http://www.emacswiki.org/emacs/download/anything.el"))
 ;;
 ;;   (trindle:install)
 ;;   (trindle:install!)
@@ -96,6 +96,19 @@
   :type 'string
   :group 'trindle)
 
+(defconst trindle-methods
+  '(:github    (:install trindle-github-clone
+                :update  trindle-github-pull)
+    :emacswiki (:install trindle-emacswiki-install
+                :update  trindle-emacswiki-update)
+    :git       (:install trindle-github-clone
+                :update  trindle-github-pull)
+    :http      (:install trindle-http-install
+                :update  trindle-http-update)
+    :svn       (:install trindle-svn-checkout
+                :update  trindle-svn-update))
+    "The list of methods according to action.")
+
 (defvar trindle-packages nil
   "Holding the list of packages.")
 
@@ -121,6 +134,10 @@
   (let ((install-dir (trindle-get-install-dir package-name)))
     (concat (file-name-as-directory install-dir) (concat package-name ".el"))))
 
+(defun trindle-get-method (type action)
+  "The method according to action is returned. "
+  (plist-get (plist-get trindle-methods (intern (concat ":" type))) action))
+
 (defun trindle-installed-pkg-list ()
   "List of the packages installed is returned."
   (remove-if '(lambda (package) (equal 0 (string-match "\\." package)))
@@ -134,6 +151,14 @@
              (url  (plist-get package :url))
              (package-name (trindle-get-package-name (or name url))))
         (setq result (append result (list package-name)))))))
+
+(defun trindle-task-list (action)
+  "The list of processings for every package is returned."
+  (mapcar '(lambda (package)
+             (lexical-let* ((package package)
+                            (type (plist-get package :type))
+                            (method (trindle-get-method type action)))
+               (lambda () (funcall method package)))) trindle-packages))
 
 (defun trindle-write-load-path (install-path)
   "Writing the load path in the configuration file"
@@ -158,12 +183,20 @@
 (defun trindle-message (&rest string)
   "Output to the buffer for trindle-result-buffer"
   (with-current-buffer (get-buffer-create trindle-result-buffer)
+    (goto-char (point-max))
     (insert (concat (apply 'format string) "\n"))))
 
 (defun trindle:install ()
   (interactive)
-  (dolist (package trindle-packages)
-    (trindle-delegate "install" package)))
+  (let ((task (trindle-task-list :install)))
+    (deferred:$
+      (deferred:next
+        (lambda () (trindle-message "Trindle Install START")))
+      (deferred:loop (reverse task) 'funcall)
+      (deferred:nextc it
+        (lambda ()
+          (display-buffer trindle-result-buffer)
+          (trindle-message "Trindle Install END"))))))
 
 (defun trindle:install! ()
   (interactive)
@@ -172,8 +205,15 @@
 
 (defun trindle:update ()
   (interactive)
-  (dolist (package trindle-packages)
-    (trindle-delegate "update" package)))
+  (let ((task (trindle-task-list :update)))
+    (deferred:$
+      (deferred:next
+        (lambda () (trindle-message "Trindle Update START")))
+      (deferred:loop (reverse task) 'funcall)
+      (deferred:nextc it
+        (lambda ()
+          (display-buffer trindle-result-buffer)
+          (trindle-message "Trindle Update END"))))))
 
 (defun trindle:clear ()
   (interactive)
@@ -192,30 +232,10 @@
                  (trindle-message "\"%s\" was Deleted." remove-dir))
         (trindle-message "Could not find package \"%s\"" remove-package)))))
 
-(defun trindle-delegate (action package)
-  (let ((type (plist-get package :type)))
-    (cond ((equal action "install")
-           (cond ((equal "http"      type) (trindle-http-install      package))
-                 ((equal "emacswiki" type) (trindle-emacswiki-install package))
-                 ((equal "git"       type) (trindle-git-clone         package))
-                 ((equal "github"    type) (trindle-github-clone      package))
-                 ((equal "svn"       type) (trindle-svn-checkout      package))))
-          ((equal action "update")
-           (cond ((equal "http"      type) (trindle-http-update       package))
-                 ((equal "emacswiki" type) (trindle-emacswiki-update  package))
-                 ((equal "git"       type) (trindle-git-pull          package))
-                 ((equal "github"    type) (trindle-github-pull       package))
-                 ((equal "svn"       type) (trindle-svn-update        package)))))))
-
 (defun trindle-github-clone (package)
   (let* ((name (plist-get package :name))
          (url  (format trindle-github-base-url name)))
     (trindle-git-clone (append package (list :url url)))))
-
-(defun trindle-emacswiki-install (package)
-  (let* ((elisp-name (plist-get package :name))
-         (url (format trindle-emacswiki-base-url elisp-name)))
-    (trindle-http-install (append package (list :url url)))))
 
 (defun trindle-git-clone (package)
   (lexical-let* ((url (plist-get package :url))
@@ -247,6 +267,11 @@
         (deferred:error it
           (lambda (err)
             (trindle-message "[NG] Package %s Install Failure." package-name)))))))
+
+(defun trindle-emacswiki-install (package)
+  (let* ((elisp-name (plist-get package :name))
+         (url (format trindle-emacswiki-base-url elisp-name)))
+    (trindle-http-install (append package (list :url url)))))
 
 (defun trindle-http-install (package)
   (lexical-let* ((url (plist-get package :url))
@@ -280,11 +305,6 @@
          (url (format trindle-github-base-url repository-name)))
     (trindle-git-pull (append package (list :url url)))))
 
-(defun trindle-emacswiki-update (package)
-  (let* ((elisp-name (plist-get package :name))
-         (url (format trindle-emacswiki-base-url elisp-name)))
-    (trindle-http-update (append package (list :url url)))))
-
 (defun trindle-git-pull (package)
   (lexical-let* ((url (plist-get package :url))
                  (branch (or (plist-get package :branch) "master"))
@@ -313,6 +333,11 @@
               (trindle-message "[OK] Package %s Updated." package-name)))
           (deferred:error it
             (lambda (err) (trindle-message "[NG] Package %s Updated Failuer." package-name)))))))
+
+(defun trindle-emacswiki-update (package)
+  (let* ((elisp-name (plist-get package :name))
+         (url (format trindle-emacswiki-base-url elisp-name)))
+    (trindle-http-update (append package (list :url url)))))
 
 (defun trindle-http-update (package)
   (lexical-let* ((url (plist-get package :url))
