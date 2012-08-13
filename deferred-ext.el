@@ -17,7 +17,9 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-(add-to-list 'load-path (expand-file-name "emacs-deferred" (file-name-directory (or load-file-name buffer-file-name))))
+(add-to-list 'load-path (expand-file-name
+                         "emacs-deferred"
+                         (file-name-directory (or load-file-name buffer-file-name))))
 (require 'concurrent)
 
 (defun deferred:trindle:process (proc-dir command &rest args)

@@ -149,7 +149,7 @@
 (defun trindle-plist-get (list label default)
   "plist-get which returns a default value when a value is nil."
   (let ((value (plist-get list label)))
-    (if (eq value nil) default value)))
+    (if (eq value 'f) nil default)))
 
 (defun trindle-installed-pkg-list ()
   "List of the packages installed is returned."
@@ -248,19 +248,21 @@
                  (branch       (trindle-plist-get package :branch "master"))
                  (package-name (trindle-get-package-name url))
                  (package-dir  (trindle-get-package-dir package-name))
-                 (trindle-dir  (file-name-as-directory trindle-dir)))
+                 (trindle-dir  (file-name-as-directory trindle-dir))
+                 (submodule    (trindle-plist-get package :submodule t)))
     (unless (file-directory-p package-dir)
       (deferred:$
         (deferred:trindle:process
           trindle-dir "git" "--no-pager" "clone" "-b" branch url)
-        (deferred:trindle:processc it
-          package-dir "git"  "--no-pager" "submodule" "update" "--init" "--recursive")
+        (if submodule
+            (deferred:trindle:processc it
+              package-dir "git"  "--no-pager" "submodule" "update" "--init" "--recursive") it)
         (deferred:nextc it
           (lambda ()
             (trindle-message "[OK] Package %s:%s Installed." package-name branch)))
         (deferred:error it
           (lambda (err)
-            (trindle-message "[NG] Package %s:%s Install Failure." package-name branch)))))))
+            (trindle-message "[NG] Package %s:%s Install Failure. \n %s" package-name branch err)))))))
 
 (defun trindle-github-pull (package)
   (let* ((repository-name (plist-get package :name))
@@ -271,13 +273,15 @@
   (lexical-let* ((url (plist-get package :url))
                  (branch       (trindle-plist-get package :branch "master"))
                  (package-name (trindle-get-package-name url))
-                 (package-dir  (trindle-get-package-dir package-name)))
+                 (package-dir  (trindle-get-package-dir package-name))
+                 (submodule    (trindle-plist-get package :submodule t)))
     (if (file-directory-p package-dir)
         (deferred:$
           (deferred:trindle:process
             package-dir "git" "--no-pager" "pull")
-          (deferred:trindle:processc it
-            package-dir "git" "--no-pager" "submodule" "update" "--init" "--recursive")
+          (if submodule
+              (deferred:trindle:processc it
+                package-dir "git" "--no-pager" "submodule" "update" "--init" "--recursive") it)
           (deferred:nextc it
             (lambda ()
               (trindle-message "[OK] Package %s:%s Updated." package-name branch)))
