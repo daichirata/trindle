@@ -149,7 +149,9 @@
 (defun trindle-plist-get (list label default)
   "plist-get which returns a default value when a value is nil."
   (let ((value (plist-get list label)))
-    (if (eq value 'f) nil default)))
+    (cond ((eq value nil) default)
+          ((eq value 'f) nil)
+          (t value))))
 
 (defun trindle-installed-pkg-list ()
   "List of the packages installed is returned."
