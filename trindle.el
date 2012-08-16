@@ -1,57 +1,35 @@
 ;;; trindle.el - Simple Emacs LISP management extension
-;;
+
 ;; Copyright (C) 2012 Daichi Hirata
-;;
+
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation; either version 2, or (at your option)
 ;; any later version.
-;;
+
 ;; This file is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU General Public License for more details.
-;;
+
 ;; You should have received a copy of the GNU General Public License
 ;; along with GNU Emacs; see the file COPYING.  If not, write to the
 ;; Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 ;; Boston, MA 02110-1301, USA.
-;;
+
 ;; Author: Daichi Hirata <daichi.hirat@gmail.com>
-;;
+
 ;;; Commentary:
 ;;
 ;; 'trindle.el' referred to "bundler" of programming language ruby, and created it.
 ;; Unlike package management, only the function of simple management is offered.
 ;; These manage that in which I have installed what from init.el(or any config file).
-;;
+
 ;;;  TODO:
 ;;
 ;;     - Write a Sample and Useage.
 ;;     - Refactoring of duplication function.
 ;;     - Byte compile processing after installation is added.
-;;
-;;; Samples: It is temporary now :p
-;;
-;;   (require 'trindle)
-;;   (setq trindle-dir "~/.emacs.d/elisp/trindle")
-;;
-;;   (trindle:packages
-;;     (:type "github"    :name "ejmr/php-mode")
-;;     (:type "github"    :name "defunkt/coffee-mode")
-;;     (:type "github"    :name "daic-h/trindle")
-;;     (:type "emacswiki" :name "auto-complete")
-;;     (:type "emacswiki" :name "ruby-block")
-;;     (:type "http"      :url  "http://www.emacswiki.org/emacs/download/anything.el"))
-;;
-;;   (trindle:initialize)
-;;   (trindle:install)
-;;   (trindle:install!)
-;;   (trindle:update)
-;;   (trindle:clear)
-;;   (trindle:remove)
-;;
-;;--------------------------------------------------------------------
 
 ;;; Code:
 (eval-when-compile (require 'cl))
@@ -61,9 +39,16 @@
   "trindle"
   :group 'trindle)
 
-(defcustom trindle-dir "~/.emacs.d/trindle"
-  "Path where to install the packages."
+(defcustom trindle-dir
+  "~/.emacs.d/trindle"
+  "Path where to install packages."
   :type 'directory
+  :group 'trindle)
+
+(defcustom trindle-smp
+  1
+  "The number of concurrencies is controlled."
+  :type 'integer
   :group 'trindle)
 
 (defcustom trindle-load-packages
@@ -76,18 +61,6 @@
   t
   "Byte compile is performed at the time of download and update."
   :type 'boolean
-  :group 'trindle)
-
-(defcustom trindle-emacswiki-base-url
-  "http://www.emacswiki.org/emacs/download/%s.el"
-  "The download URL of emacswiki"
-  :type 'string
-  :group 'trindle)
-
-(defcustom trindle-github-base-url
-  "https://github.com/%s.git"
-  "The download URL of Github"
-  :type 'string
   :group 'trindle)
 
 (defcustom trindle-result-buffer
@@ -105,6 +78,8 @@
                 :update  trindle-github-pull)
     :http      (:install trindle-http-install
                 :update  trindle-http-update)
+    :http-tar  (:install trindle-http-tar-install
+                :update  trindle-http-tar-update)
     :svn       (:install trindle-svn-checkout
                 :update  trindle-svn-update))
     "The list of methods according to action.")
@@ -113,11 +88,16 @@
   "^\\.\\|\\.elc$\\|^test$\\|^tests$\\|^sample$"
   "It excepts from `trindle-get-recuresive-path-list.'")
 
-(defvar trindle-smp 1
-  "The number of concurrencies is controlled.")
-
 (defvar trindle-packages nil
   "Holding the list of packages.")
+
+(defvar trindle-emacswiki-base-url
+  "http://www.emacswiki.org/emacs/download/%s.el"
+  "Download URL of emacswiki")
+
+(defvar trindle-github-base-url
+  "https://github.com/%s.git"
+  "Download URL of Github")
 
 (defmacro trindle:packages (&rest packages)
   "Macro for defining a package briefly."
@@ -129,61 +109,71 @@
      (add-to-list 'trindle-packages package)))
 
 (defun trindle-get-package-name (url_or_repo)
-  "Get package name by URL or repository name."
+  "Get package name from URL or repository name."
   (file-name-sans-extension (file-name-nondirectory url_or_repo)))
 
 (defun trindle-get-package-dir (package-name)
   "Get install dir by package name."
   (file-name-as-directory
-   (concat (file-name-as-directory trindle-dir) package-name)))
+   (concat (file-name-as-directory trindle-dir)
+           package-name)))
 
 (defun trindle-get-install-path (package-name)
   "Get install file path by package name."
   (let ((install-dir (trindle-get-package-dir package-name)))
-    (concat (file-name-as-directory install-dir) (concat package-name ".el"))))
+    (concat (file-name-as-directory install-dir)
+            (concat package-name ".el"))))
 
 (defun trindle-get-method (type action)
   "The method according to action is returned. "
-  (plist-get (plist-get trindle-methods (intern (concat ":" type))) action))
+  (plist-get (plist-get trindle-methods
+                        (intern (concat ":" type)))
+             action))
 
 (defun trindle-plist-get (list label default)
-  "plist-get which returns a default value when a value is nil."
-  (let ((value (plist-get list label)))
-    (cond ((eq value nil) default)
-          ((eq value 'f) nil)
-          (t value))))
+  "When value is not set to list, a default value returns."
+  (if (plist-member list label)
+      (plist-get list label)
+    default))
+
+(defun trindle-get-package-from-name (name)
+  "Based on the name, to get the package."
+  (loop for package in trindle-packages
+        for _name = (trindle-get-package-name
+                     (or (plist-get package :url)
+                         (plist-get package :name)))
+        if (string= name _name)
+        return package))
 
 (defun trindle-installed-pkg-list ()
   "List of the packages installed is returned."
-  (when (file-directory-p trindle-dir)
-    (remove-if '(lambda (package) (string-match "^\\.\\|trindle" package))
-               (directory-files trindle-dir))))
+  (directory-files trindle-dir nil "^[0-9|A-Z|a-z]"))
 
 (defun trindle-registered-pkg-list ()
   "List of the packages registered is returned."
-  (let (result)
-    (dolist (package trindle-packages result)
-      (let* ((name (plist-get package :name))
-             (url  (plist-get package :url))
-             (package-name (trindle-get-package-name (or name url))))
-        (add-to-list 'result package-name)))))
+  (loop for package in trindle-packages
+        for name = (trindle-get-package-name
+                    (or (plist-get package :name)
+                        (plist-get package :url)))
+        collect name))
 
-(defun trindle-make-task-list (action)
+(defun trindle-load-path-list ()
+  "List of load paths to add is returned."
+  (loop for package in trindle-packages
+        for name = (trindle-get-package-name
+                    (or (plist-get package :name)
+                        (plist-get package :url)))
+        for load-path = (trindle-plist-get package :load-path t)
+        if load-path collect (trindle-get-package-dir name)))
+
+(defun trindle-task-list (action)
   "The list of processings for every package is returned."
-  (mapcar (lambda (package)
-            (let* ((type (plist-get package :type))
-                   (method (trindle-get-method type action)))
-              `(lambda () (,method ',package))))
-          trindle-packages))
-
-(defun trindle-add-load-path-recursively (paths)
-  "It adds to a load path recursively."
-  (let (path)
-    (dolist (path paths)
-      (let ((default-directory path))
-        (add-to-list 'load-path default-directory)
-        (if (fboundp 'normal-top-level-add-subdirs-to-load-path)
-            (normal-top-level-add-subdirs-to-load-path))))))
+  (mapcar
+   (lambda (package)
+     (let* ((type (plist-get package :type))
+            (method (trindle-get-method type action)))
+       `(lambda () (,method ',package))))
+   trindle-packages))
 
 (defun trindle-message (&rest string)
   "Output to the buffer for `trindle-result-buffer'"
@@ -192,14 +182,15 @@
     (insert (concat (apply 'format string) "\n"))))
 
 (defun trindle:initialize ()
-  "The path of a package is added to a load path."
+  "Path of a package is added to a load path."
   (interactive)
-  (trindle-add-load-path-recursively (list trindle-dir)))
+  (loop for path in (trindle-load-path-list) do
+        (add-to-list 'load-path path)))
 
 (defun trindle:install ()
   (interactive)
   (trindle-message "Trindle Install START")
-  (let ((task (trindle-make-task-list :install))
+  (let ((task (trindle-task-list :install))
         (smp (cc:semaphore-create trindle-smp)))
     (loop for tsk in task do
           (cc:semaphore-with smp tsk))
@@ -209,8 +200,24 @@
 
 (defun trindle:update ()
   (interactive)
+  (let* ((name (read-string "package: "))
+         (package (trindle-get-package-from-name name)))
+    (if package
+        (let* ((smp (cc:semaphore-create trindle-smp))
+               (type (plist-get package :type))
+               (method (trindle-get-method type :update)))
+          (cc:semaphore-with smp
+            (lambda () (trindle-message "Trindle Update START")))
+          (cc:semaphore-with smp
+            (lambda () (funcall method package)))
+          (cc:semaphore-with smp
+            (lambda () (trindle-message "Trindle Update END"))))
+      (trindle-message "Package:%s is not found." name))))
+
+(defun trindle:update-all ()
+  (interactive)
   (trindle-message "Trindle Update START")
-  (let ((task (trindle-make-task-list :update))
+  (let ((task (trindle-task-list :update))
         (smp (cc:semaphore-create trindle-smp)))
     (loop for tsk in task do
           (cc:semaphore-with smp tsk))
@@ -221,19 +228,21 @@
 (defun trindle:clear ()
   (interactive)
   (let ((remove-packages
-         (remove-if (lambda (package)
-                      (member package (trindle-registered-pkg-list)))
-                    (trindle-installed-pkg-list))))
-    (and remove-packages (trindle:remove remove-packages))))
+         (loop for pkg in (trindle-installed-pkg-list)
+               unless (member pkg (trindle-registered-pkg-list))
+               collect pkg)))
+    (when remove-packages
+      (trindle:remove remove-packages))))
 
-(defun trindle:remove (&optional rp-list)
+(defun trindle:remove (&optional pkgs)
   (interactive)
-  (loop for rp in (or rp-list (trindle-installed-pkg-list)) do
-        (let ((remove-dir (trindle-get-package-dir rp)))
-          (if (file-directory-p remove-dir)
-              (progn (dired-delete-file remove-dir 'always)
-                     (trindle-message "\"%s\" was Deleted." remove-dir))
-            (trindle-message "Could not find package \"%s\"" rp)))))
+  (loop for pkg in (or pkgs (trindle-installed-pkg-list))
+        for remove-dir = (trindle-get-package-dir pkg)
+        if (file-directory-p remove-dir) do
+        (dired-delete-file remove-dir 'always)
+        (trindle-message "\"%s\" was Deleted." remove-dir)
+        else do
+        (trindle-message "Could not find package \"%s\"" pkg)))
 
 (defun trindle:install! ()
   (interactive)
@@ -289,7 +298,7 @@
               (trindle-message "[OK] Package %s:%s Updated." package-name branch)))
           (deferred:error it
             (lambda (err)
-              (trindle-message "[NG] Package %s:%s Updated Failuer." package-name branch)))))))
+              (trindle-message "[NG] Package %s:%s Updated Failuer. \n %s" package-name branch err)))))))
 
 (defun trindle-svn-checkout (package)
   (lexical-let* ((url (plist-get package :url))
@@ -304,7 +313,7 @@
             (trindle-message "[OK] Package %s Installed." package-name)))
         (deferred:error it
           (lambda (err)
-            (trindle-message "[NG] Package %s Install Failure." package-name)))))))
+            (trindle-message "[NG] Package %s Install Failure. \n %s" package-name err)))))))
 
 (defun trindle-svn-update (package)
   (lexical-let* ((package-name (plist-get package :name))
@@ -317,7 +326,7 @@
               (trindle-message "[OK] Package %s Updated." package-name)))
           (deferred:error it
             (lambda (err)
-              (trindle-message "[NG] Package %s Updated Failuer." package-name)))))))
+              (trindle-message "[NG] Package %s Updated Failuer. \n %s" package-name err)))))))
 
 (defun trindle-emacswiki-install (package)
   (let* ((elisp-name (plist-get package :name))
@@ -349,7 +358,7 @@
                     (trindle-message "[OK] Package %s Installed." package-name))))
               (kill-buffer))))
         (deferred:error it
-          (lambda (err) (trindle-message "[NG] Package %s Install Failure." package-name)))))))
+          (lambda (err) (trindle-message "[NG] Package %s Install Failure. \n %s" package-name err)))))))
 
 (defun trindle-emacswiki-update (package)
   (let* ((elisp-name (plist-get package :name))
@@ -381,7 +390,40 @@
                     (trindle-message "[OK] Package %s Updated." package-name))))
               (kill-buffer))))
         (deferred:error it
-          (lambda (err) (trindle-message "[NG] Package %s Updated Failuer." package-name)))))))
+          (lambda (err) (trindle-message "[NG] Package %s Updated Failuer. \n %s" package-name err)))))))
+
+;; TODO
+(defun trindle-http-tar-install (package)
+  (lexical-let* ((url (plist-get package :url))
+                 (package-name (plist-get package :name))
+                 (install-dir (trindle-get-package-dir package-name))
+                 (src (file-name-as-directory (concat install-dir "src")))
+                 (tar (file-name-nondirectory url)))
+    (unless (file-directory-p install-dir)
+      (deferred:$
+        (deferred:url-retrieve url)
+        (deferred:nextc it
+          (lambda (buf)
+            (with-current-buffer buf
+              (goto-char (point-min))
+              (re-search-forward "^$" nil 'move)
+              (forward-char)
+              (delete-region (point-min) (point))
+              (goto-char (point-min))
+              (when (string-match "^<!DOCTYPE" (buffer-substring-no-properties
+                                                (point-at-bol) (point-at-eol)))
+                (trindle-message "[NG] Package %s Install Failure." package-name)
+                (deferred:cancel it))
+              (let ((byte-compile-warnings nil) emacs-lisp-mode-hook)
+                (make-directory install-dir t)
+                (make-directory src t)
+                (write-file (concat install-dir tar)))
+              (kill-buffer))))
+        (deferred:trindle:processc it install-dir "tar" "zxvf" tar "-C" "src")
+        (deferred:nextc it
+          (lambda () (trindle-message "[OK] Package %s Installed." package-name)))
+        (deferred:error it
+          (lambda (err) (trindle-message "[NG] Package %s Install Failure. \n %s" package-name err)))))))
 
 ;; (defun trindle-byte-compile-exec (install-path)
 ;;   (deferred:$
