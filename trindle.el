@@ -489,8 +489,7 @@
               (when (string-match "^<\\!DOCTYPE\\|^<\\?xml"
                                   (buffer-substring-no-properties
                                    (point-at-bol) (point-at-eol)))
-                (trindle-message "[NG] Package %s Update Failure." package-name)
-                (deferred:cancel it))
+                (signal 'error "download goes wrong."))
               (let ((byte-compile-warnings nil) emacs-lisp-mode-hook)
                 (delete-file (concat package-dir tar))
                 (dired-delete-file src 'always)
