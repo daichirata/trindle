@@ -472,24 +472,6 @@
         (deferred:error it
           (lambda (err) (trindle-message "[NG] Package %s Update Failure.\n %s" name err)))))))
 
-(defun trindle-async-byte-compile (package-dir)
-  (lexical-let ((file (symbol-file 'trindle-byte-compile)))
-    (deferred:trindle:process package-dir
-      "emacs" "-batch"
-      "--eval" (format "(setq trindle-byte-compile-path \"%s\")" package-dir)
-      "--eval" (format "(setq load-path (append '%S load-path)))" load-path)
-      "-L" (file-name-directory file)
-      "-l" (file-name-sans-extension file)
-      "-f" "trindle-byte-compile")))
-
-(defun trindle-byte-compile ()
-  (defvar trindle-byte-compile-path "")
-  (let ((default-directory trindle-byte-compile-path))
-    (add-to-list 'load-path trindle-byte-compile-path)
-    (if (fboundp 'normal-top-level-add-subdirs-to-load-path)
-        (normal-top-level-add-subdirs-to-load-path))
-    (byte-recompile-directory trindle-byte-compile-path 0)))
-
 (defun trindle-delete-header (buf)
   (with-current-buffer buf
     (goto-char (point-min))
@@ -502,6 +484,30 @@
            (buffer-substring-no-properties
             (point-at-bol) (point-at-eol)))
       (error "Download goes wrong."))) buf)
+
+(defun trindle-async-byte-compile (package-dir)
+  (lexical-let ((trindle (symbol-file 'trindle-byte-compile)))
+    (deferred:trindle:process package-dir
+      "emacs" "-batch"
+      "--eval" (format "(setq trindle-byte-compile-path \"%s\")" package-dir)
+      "--eval" (format "(setq load-path (append '%S load-path)))" load-path)
+      "-L" (file-name-directory trindle)
+      "-l" (file-name-sans-extension trindle)
+      "-f" "trindle-byte-compile")))
+
+(defun trindle-byte-compile ()
+  (defvar trindle-byte-compile-path "")
+  (let ((default-directory trindle-byte-compile-path)
+        (files (directory-files trindle-byte-compile-path t "^[0-9|A-Z|a-z]"))
+        (byte-compile-warnings nil) emacs-lisp-mode-hook)
+    (add-to-list 'load-path trindle-byte-compile-path)
+    (if (fboundp 'normal-top-level-add-subdirs-to-load-path)
+        (normal-top-level-add-subdirs-to-load-path))
+    (loop for f in files do
+          (if (file-directory-p f)
+              (byte-recompile-directory f 0)
+            (if (string-match "\\.el$" f)
+                (byte-compile-file f))))))
 
 (provide 'trindle)
 ;;; trindle.el ends here
