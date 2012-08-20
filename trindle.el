@@ -25,11 +25,8 @@
 ;; Unlike package management, only the function of simple management is offered.
 ;; These manage that in which I have installed what from init.el(or any config file).
 
-;;;  TODO:
-;;
-;;     - Write a Sample and Useage.
-;;     - Refactoring of duplication function.
-;;     - Byte compile processing after installation is added.
+;;; TODO
+;;  - Write a Sample and Useage.
 
 ;;; Code:
 (eval-when-compile (require 'cl))
@@ -215,7 +212,7 @@
   (let* ((name (read-string "package: "))
          (package (trindle-get-package-from-name name)))
     (if package
-        (let* ((smp (cc:semaphore-create trindle-smp))
+        (let* ((smp (cc:semaphore-create 1))
                (type (plist-get package :type))
                (method (trindle-get-method type :update)))
           (cc:semaphore-with smp
