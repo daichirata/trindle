@@ -24,7 +24,7 @@ These manage that in which I have installed what from init.el.
      
 ##### trindle:configure
 
-trindle:configure, perform the initial configuration of the trindle.
+`trindle:configure`, perform the initial configuration of the trindle.
 
 * `:dir` (default value: "~/.emacs.d/trindle/")
 
@@ -47,7 +47,8 @@ trindle:configure, perform the initial configuration of the trindle.
          
 ##### trindle:initialize
 
-If `:load-packages` is t or, `:load-package` of a package is t, a package is added to a `load-path`. 
+If `:load-packages` is t or, `:load-package` of a package is t, a package is added to a `load-path`.   
+If you do not plan to add to the load-path,  do not have to run.
 
 ##### trindle:packages
 
