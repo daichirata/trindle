@@ -25,8 +25,8 @@
 ;; Unlike package management, only the function of simple management is offered.
 ;; These manage that in which I have installed what from init.el(or any config file).
 
-;;; TODO
-;;  - Write a Sample and Useage.
+;;; Useage
+;;   see "https://github.com/daic-h/trindle"
 
 ;;; Code:
 (eval-when-compile (require 'cl))
@@ -283,7 +283,7 @@
     (unless (file-directory-p package-dir)
       (deferred:$
         (deferred:trindle:process
-          trindle-dir "git" "--no-pager" "clone" "-b" branch url)
+          trindle-dir "git" "--no-pager" "clone" "-b" branch url name)
         (if submodule
             (deferred:trindle:processc it
               package-dir "git"  "--no-pager" "submodule" "update" "--init" "--recursive") it)
