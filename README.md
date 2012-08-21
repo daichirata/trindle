@@ -9,6 +9,17 @@ So please correct my English.
 Unlike package management, only the function of simple management is offered.
 These manage that in which I have installed what from init.el.
 
+## Installation: ##
+
+    git clone --recursive https://daic-h/trindle.git
+    
+or
+
+    git clone https://daic-h/trindle.git
+    git submodule update --init --recursive
+    
+Please add these files to the load-path.
+
 ## Useage: ##
 
 ### Configure:
