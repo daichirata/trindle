@@ -170,7 +170,7 @@
   (loop for package in trindle-packages
         for type = (plist-get package :type)
         for name = (file-name-nondirectory (plist-get package :name))
-        for load-path = (trindle-plist-get package :load-path trindle-load-packages)
+        for load-path = (trindle-plist-get package :load-package trindle-load-packages)
         for path = (if (string= type "http-tar")
                        (trindle-get-package-src-dir name)
                      (trindle-get-package-dir name))
