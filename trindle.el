@@ -90,6 +90,9 @@
 (defvar trindle-packages nil
   "Holding the list of packages.")
 
+(defvar trindle-log-str nil
+  "")
+
 (defvar trindle-emacswiki-base-url
   "http://www.emacswiki.org/emacs/download/%s.el"
   "Download URL of emacswiki")
@@ -170,11 +173,11 @@
   (loop for package in trindle-packages
         for type = (plist-get package :type)
         for name = (file-name-nondirectory (plist-get package :name))
-        for load-path = (trindle-plist-get package :load-package trindle-load-packages)
+        for lpath = (trindle-plist-get package :load-package trindle-load-packages)
         for path = (if (string= type "http-tar")
                        (trindle-get-package-src-dir name)
                      (trindle-get-package-dir name))
-        if (and load-path path) collect path))
+        if (and lpath path) collect path))
 
 (defun trindle-task-list (action)
   "The list of processings for every package is returned."
@@ -191,10 +194,25 @@
     (goto-char (point-max))
     (insert (concat (apply 'format string) "\n"))))
 
+(defun trindle-log (&rest string)
+  ""
+  (if (equal '(show) string)
+      (trindle-message
+       (mapconcat 'identity (reverse trindle-log-str) "\n"))
+    (push (apply 'format string) trindle-log-str)))
+
 (defun trindle:initialize ()
   (interactive)
-  (loop for path in (trindle-load-path-list) do
-        (add-to-list 'load-path path)))
+  (loop for path in (trindle-load-path-list)
+        for fullpath = (file-name-directory (expand-file-name path))
+        for loaddefs = (concat fullpath ".loaddefs.el") do
+        (when (file-directory-p fullpath)
+          (trindle-log "add load-path:%S" fullpath)
+          (add-to-list 'load-path fullpath))
+        (when (file-exists-p loaddefs)
+          (trindle-log "load loaddefs:%S" loaddefs)
+          (load-file loaddefs))
+        finally (trindle-log 'show)))
 
 (defun trindle:install ()
   (interactive)
