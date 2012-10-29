@@ -26,10 +26,13 @@
 ;; These manage that in which I have installed what from init.el(or any config file).
 
 ;;; Useage
-;;   see "https://github.com/daic-h/trindle"
+;;
+;;
 
 ;;; Code:
 (eval-when-compile (require 'cl))
+(require 'url)
+(require 'dired)
 (require 'deferred-ext)
 
 (defgroup trindle nil
@@ -47,6 +50,7 @@
   "The number of concurrencies is controlled."
   :type 'integer
   :group 'trindle)
+
 
 (defcustom trindle-load-packages
   t
@@ -91,7 +95,7 @@
   "Holding the list of packages.")
 
 (defvar trindle-log-str nil
-  "")
+  "Holding the string of log message")
 
 (defvar trindle-emacswiki-base-url
   "http://www.emacswiki.org/emacs/download/%s.el"
@@ -114,6 +118,7 @@
                                 (smp trindle-smp)
                                 (byte-compile trindle-byte-compile)
                                 (load-packages trindle-load-packages))
+  "Initialize the variable dir, smp, byte-compile, load-packages."
   (setq trindle-dir dir
         trindle-smp smp
         trindle-byte-compile byte-compile
@@ -171,12 +176,12 @@
 (defun trindle-load-path-list ()
   "List of packages load path."
   (loop for package in trindle-packages
-        for type = (plist-get package :type)
-        for name = (file-name-nondirectory (plist-get package :name))
+        for type  = (plist-get package :type)
+        for name  = (file-name-nondirectory (plist-get package :name))
         for lpath = (trindle-plist-get package :load-package trindle-load-packages)
-        for path = (if (string= type "http-tar")
-                       (trindle-get-package-src-dir name)
-                     (trindle-get-package-dir name))
+        for path  = (if (string= type "http-tar")
+                        (trindle-get-package-src-dir name)
+                      (trindle-get-package-dir name))
         if (and lpath path) collect path))
 
 (defun trindle-task-list (action)
@@ -195,7 +200,7 @@
     (insert (concat (apply 'format string) "\n"))))
 
 (defun trindle-log (&rest string)
-  ""
+  "keep a log to `trindle-str'"
   (if (equal '(show) string)
       (trindle-message
        (mapconcat 'identity (reverse trindle-log-str) "\n"))
@@ -205,13 +210,10 @@
   (interactive)
   (loop for path in (trindle-load-path-list)
         for fullpath = (file-name-directory (expand-file-name path))
-        for loaddefs = (concat fullpath ".loaddefs.el") do
+        do
         (when (file-directory-p fullpath)
-          (trindle-log "add load-path:%S" fullpath)
+          (trindle-log "load-path:%S" fullpath)
           (add-to-list 'load-path fullpath))
-        (when (file-exists-p loaddefs)
-          (trindle-log "load loaddefs:%S" loaddefs)
-          (load-file loaddefs))
         finally (trindle-log 'show)))
 
 (defun trindle:install ()
@@ -267,9 +269,9 @@
         for remove-dir = (trindle-get-package-dir pkg)
         if (file-directory-p remove-dir) do
         (dired-delete-file remove-dir 'always)
-        (trindle-message "\"%s\" was Deleted." remove-dir)
+        (trindle-message "%S was Deleted." remove-dir)
         else do
-        (trindle-message "Could not find package \"%s\"" pkg)))
+        (trindle-message "Could not find package %S" pkg)))
 
 (defun trindle:install! ()
   (interactive)
@@ -307,7 +309,7 @@
               package-dir "git"  "--no-pager" "submodule" "update" "--init" "--recursive") it)
         (if byte-comp
             (deferred:nextc it
-              (lambda () (trindle-async-byte-compile package-dir))) it)
+              (lambda () (trindle-async-exec "trindle-byte-compile" package-dir))) it)
         (deferred:nextc it
           (lambda ()
             (trindle-message "[OK] Package %s:%s Installed." name branch)))
@@ -331,7 +333,7 @@
                 package-dir "git" "--no-pager" "submodule" "update" "--init" "--recursive") it)
           (if byte-comp
               (deferred:nextc it
-                (lambda () (trindle-async-byte-compile package-dir))) it)
+                (lambda () (trindle-async-exec "trindle-byte-compile" package-dir))) it)
           (deferred:nextc it
             (lambda ()
               (trindle-message "[OK] Package %s:%s Updated." name branch)))
@@ -350,7 +352,7 @@
         (deferred:trindle:process trindle-dir "svn" "checkout" url name)
         (if byte-comp
             (deferred:nextc it
-              (lambda () (trindle-async-byte-compile package-dir))) it)
+              (lambda () (trindle-async-exec "trindle-byte-compile" package-dir))) it)
         (deferred:nextc it
           (lambda ()
             (trindle-message "[OK] Package %s Installed." name)))
@@ -367,7 +369,7 @@
           (deferred:trindle:process package-dir "svn" "update")
           (if byte-comp
               (deferred:nextc it
-                (lambda () (trindle-async-byte-compile package-dir))) it)
+                (lambda () (trindle-async-exec "trindle-byte-compile" package-dir))) it)
           (deferred:nextc it
             (lambda ()
               (trindle-message "[OK] Package %s Updated." name)))
@@ -403,7 +405,7 @@
         (deferred:nextc it #'deferred:url-delete-buffer)
         (if byte-comp
             (deferred:nextc it
-              (lambda () (trindle-async-byte-compile package-dir))) it)
+              (lambda () (trindle-async-exec "trindle-byte-compile" package-dir))) it)
         (deferred:nextc it
           (lambda () (trindle-message "[OK] Package %s Installed." name)))
         (deferred:error it
@@ -427,7 +429,7 @@
         (deferred:nextc it #'deferred:url-delete-buffer)
         (if byte-comp
             (deferred:nextc it
-              (lambda () (trindle-async-byte-compile package-dir))) it)
+              (lambda () (trindle-async-exec "trindle-byte-compile" package-dir))) it)
         (deferred:nextc it
           (lambda () (trindle-message "[OK] Package %s Updated." name)))
         (deferred:error it
@@ -455,7 +457,7 @@
         (deferred:trindle:processc it package-dir "tar" "zxvf" tar "-C" "src")
         (if byte-comp
             (deferred:nextc it
-              (lambda () (trindle-async-byte-compile package-dir))) it)
+              (lambda () (trindle-async-exec "trindle-byte-compile" package-dir))) it)
         (deferred:nextc it
           (lambda () (trindle-message "[OK] Package %s Installed." name)))
         (deferred:error it
@@ -484,7 +486,7 @@
         (deferred:trindle:processc it package-dir "tar" "zxvf" tar "-C" "src")
         (if byte-comp
             (deferred:nextc it
-              (lambda () (trindle-async-byte-compile package-dir))) it)
+              (lambda () (trindle-async-exec "trindle-byte-compile" package-dir))) it)
         (deferred:nextc it
           (lambda () (trindle-message "[OK] Package %s Updated." name)))
         (deferred:error it
@@ -503,29 +505,30 @@
             (point-at-bol) (point-at-eol)))
       (error "Download goes wrong."))) buf)
 
-(defun trindle-async-byte-compile (package-dir)
-  (lexical-let ((trindle (symbol-file 'trindle-byte-compile)))
+(defun trindle-async-exec (funcname package-dir)
+  (lexical-let ((trindle (symbol-file 'trindle-async-exec)))
     (deferred:trindle:process package-dir
       "emacs" "-batch"
-      "--eval" (format "(setq trindle-byte-compile-path \"%s\")" package-dir)
+      "--eval" (format "(setq trindle-package-dir %S)" package-dir)
       "--eval" (format "(setq load-path (append '%S load-path)))" load-path)
       "-L" (file-name-directory trindle)
       "-l" (file-name-sans-extension trindle)
-      "-f" "trindle-byte-compile")))
+      "-f" funcname)))
 
 (defun trindle-byte-compile ()
-  (defvar trindle-byte-compile-path "")
-  (let ((default-directory trindle-byte-compile-path)
-        (files (directory-files trindle-byte-compile-path t "^[0-9|A-Z|a-z]"))
-        (byte-compile-warnings nil) emacs-lisp-mode-hook)
-    (add-to-list 'load-path trindle-byte-compile-path)
+  (defvar trindle-package-dir "")
+  (let* ((dir trindle-package-dir)
+         (default-directory dir)
+         (files (directory-files dir t "^[0-9|A-Z|a-z|]"))
+         byte-compile-warnings emacs-lisp-mode-hook)
+    (add-to-list 'load-path dir)
     (if (fboundp 'normal-top-level-add-subdirs-to-load-path)
         (normal-top-level-add-subdirs-to-load-path))
-    (loop for f in files do
-          (if (file-directory-p f)
-              (byte-recompile-directory f 0)
-            (if (string-match "\\.el$" f)
-                (byte-compile-file f))))))
+    (loop for f in files
+          if (file-directory-p f) do
+          (byte-recompile-directory f 0)
+          else do
+          (and (string-match "\\.el$" f) (byte-compile-file f)))))
 
 (provide 'trindle)
 ;;; trindle.el ends here
