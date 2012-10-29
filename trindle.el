@@ -25,10 +25,6 @@
 ;; Unlike package management, only the function of simple management is offered.
 ;; These manage that in which I have installed what from init.el(or any config file).
 
-;;; Credits
-;;
-;; kiwanami/emacs-deffered plays an important feature of this library.
-
 ;;; Installation
 ;;
 ;; $git clone--recursive https://github.com/daic-h/trindle.git
@@ -115,6 +111,10 @@
 ;;
 ;; (trindle:configure :dir "~/.emacs.d/elisp/bundle/" :smp 3)
 ;; (trindle:initialize)
+
+;;; Credits
+;;
+;; kiwanami/emacs-deffered plays an important feature of this library.
 
 ;;; Code:
 (eval-when-compile (require 'cl))
