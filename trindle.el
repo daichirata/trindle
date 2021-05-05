@@ -1,4 +1,4 @@
-;;; trindle.el - Simple Emacs LISP management extension
+;;; trindle.el --- Simple Emacs LISP management extension
 
 ;; Copyright (C) 2012 Daichi Hirata
 
